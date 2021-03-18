@@ -1,0 +1,187 @@
+#include "matrix3.h"
+#include <cstring>
+Matrix3::Matrix3()
+     :Matrix2(), c2(new double[Matrix2::dim] {0}),
+      r2(new double[Matrix2::dim] {0}),
+      l(new double(0))
+{
+}
+
+Matrix3::~Matrix3()
+{
+     delete[] c2;
+     delete[] r2;
+     delete l;
+}
+
+const double& Matrix3::operator()(int i, int j) const
+{
+     if (0 <= i && i < Matrix2::dim &&
+	 0 <= j && j < Matrix2::dim)
+	  return Matrix2::operator()(i, j);
+     else if (0 <= i && i < Matrix2::dim && j == dim-1)
+	  return r2[i];
+     else if (0 <= j && j < Matrix2::dim && i == dim-1)
+	  return c2[i];
+     else if (i == dim-1 && j == dim-1)
+	  return *l;
+     else
+	  throw bad_index {"bad index Matrix 3"};
+}
+
+double& Matrix3::operator()(int i, int j)
+{
+     const Matrix3* m = (const Matrix3*) this;
+     return (double&) m->operator()(i, j);
+}
+
+Matrix3::Matrix3(const std::initializer_list<double>& ls)
+     :Matrix2(), c2(new double[Matrix2::dim] {0}),
+      r2(new double[Matrix2::dim] {0}),
+      l(new double(0))
+{
+     auto m = std::min<std::size_t>(dim*dim, ls.size());
+     const auto* it {ls.begin()};
+     for (std::size_t k = 0; k < m; k++)
+	  operator()(k/dim, k%dim) = *it++;
+}
+
+Matrix3::Matrix3(const std::vector<double>& v)
+     :Matrix2(), c2(new double[Matrix2::dim]{0}),
+      r2(new double[Matrix2::dim]{0}),
+      l(new double(0))
+{
+     auto m = std::min<std::size_t>(dim*dim, v.size());
+     for (std::size_t k = 0; k < m; k++)
+	  operator()(k/dim, k%dim) = v[k];
+}
+
+Matrix3::Matrix3(const Matrix3& m)
+     :Matrix2(m),
+      c2{new double[Matrix2::dim]},
+      r2{new double[Matrix2::dim]},
+      l{new double}
+{
+     std::memcpy(c2, m.c2, Matrix2::dim*sizeof(double));
+     std::memcpy(r2, m.r2, Matrix2::dim*sizeof(double));
+     *l = *m.l;
+}
+
+Matrix3& Matrix3::operator=(const Matrix3& m)
+{
+     if (&m != this) {
+	  Matrix2::operator=(m);
+	  std::memcpy(c2, m.c2, Matrix2::dim*sizeof(double));
+	  std::memcpy(r2, m.r2, Matrix2::dim*sizeof(double));
+	  *l = *m.l;
+     }
+     return *this;
+}
+double Matrix3::det() const
+{
+     const Matrix3 &x = *this;
+     return x(0,0) * Matrix2(x(1,1), x(1,2), x(2,1), x(2,2)).det() -
+	  x(1,0) * Matrix2(x(0,1), x(0,2), x(2,1), x(2,2)).det() +
+	  x(2,0) * Matrix2(x(0,1), x(0,2), x(2,1), x(2,2)).det();
+}
+
+double Matrix3::spur() const
+{
+     double x{0};
+     for (int i = 0; i < Matrix3::dim; i++)
+	  x += operator()(i,i);
+     return x;
+}
+
+Matrix3& Matrix3::operator+=(const Matrix3& m)
+{
+     for (int i = 0; i < dim; i++)
+	  for (int j = 0; j < dim; j++)
+	       operator()(i, j) += m(i, j);
+     return *this;
+}
+
+Matrix3& Matrix3::operator*=(double k)
+{
+     for (int i = 0; i < dim; i++)
+	  for (int j = 0; j < dim; j++)
+	       operator()(i, j) *= k;
+     return *this;
+}
+
+Matrix3& Matrix3::operator*=(const Matrix3& m)
+{
+     Matrix3 temp {*this};
+     *this = Matrix3();
+     for (int i = 0; i < dim; i++)
+	  for (int j = 0; j < dim; j++)
+	       for (int k = 0; k < dim; k++)
+		    operator()(i, j) += temp(i, k) * m(k, j);
+     return *this;
+}
+
+static inline bool near(double a, double b, double eps)
+{
+     return std::abs(a-b) < eps*std::max(a, b);
+}
+
+bool Matrix3::operator==(const Matrix3& m) const
+{
+     bool eq = true;
+     for (int i = 0; eq && i < Matrix3::dim; i++)
+	  for (int j = 0; eq && j < Matrix3::dim; j++)
+	       eq = eq && near((*this)(i,j), m(i, j), Matrix3::eps);
+     return eq;
+}
+
+Matrix3 operator+(const Matrix3& a, const Matrix3& b)
+{
+     return Matrix3{a} += b;
+}
+
+Matrix3 operator*(double k, const Matrix3& a)
+{
+     return Matrix3{a} *= k;
+}
+
+Matrix3 operator*(const Matrix3& a, const Matrix3& b)
+{
+     return Matrix3{a} *= b;
+}
+
+bool operator!=(const Matrix3& a, const Matrix3& b)
+{
+     return !(a==b);
+}
+
+std::ostream& operator<<(std::ostream& os, const Matrix3& a)
+{
+     os << '[';
+     for (int i = 0; i < Matrix3::dim; i++) {
+	  for (int j = 0; j < Matrix3::dim; j++) {
+	       os << a(i, j);
+	       if (j != Matrix3::dim-1)
+		    os << ", ";
+	  }
+	  if (i != Matrix3::dim-1)
+	       os << "; ";
+     }
+     os << ']';
+     return os;
+	       
+}
+
+void Matrix3::print() const {
+     std::cout << *this << std::endl;
+}
+
+std::istream& operator>>(std::istream& is, Matrix3& m)
+{
+     constexpr int len = Matrix3::dim*Matrix3::dim;
+     std::vector<double> v(len);
+     for (int i = 0; i < len; i++)
+	  is >> v[i];
+     
+     m = Matrix3(v);
+     return is;
+}
